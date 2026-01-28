@@ -29,6 +29,7 @@ limitations under the License.
 #include "absl/container/btree_map.h"
 #include "absl/log/check.h"
 #include "absl/log/log.h"
+#include "absl/random/random.h"
 #include "absl/status/status.h"
 #include "absl/strings/str_cat.h"
 #include "absl/strings/str_format.h"
@@ -904,6 +905,14 @@ CreateArgumentsOnDevice(PjRtClient& client,
           ModuleArgumentMode::kUseSharedRandomInputs ||
       running_options.module_argument_mode ==
           ModuleArgumentMode::kUseZerosAsInput;
+  absl::BitGen rd;
+
+  std::optional<std::normal_distribution<double>> random_dist;
+  if (running_options.use_random_val) {
+    // Create a normal distribution
+    // mean = 0.0, standard deviation = 1.0 (gaussian(0,1))
+    random_dist.emplace(0.0, 1.0);
+  }
 
   for (int i = 0; i < num_addressable_devices; ++i) {
     VLOG(3) << "Creating fake arguments for device " << i;
@@ -929,10 +938,41 @@ CreateArgumentsOnDevice(PjRtClient& client,
         argument_literals.reserve(params.size());
       }
       for (int j = 0; j < params.size(); ++j) {
-        TF_ASSIGN_OR_RETURN(
-            Literal argument_literal_j,
-            MakeFakeLiteralWithSameValue(params[j]->shape(),
-                                         addressable_devices[i]->id()));
+        Literal argument_literal_j;
+        if (running_options.use_random_val) {
+          // Create a random number engine
+          // std::random_device provides a non-deterministic seed (from
+          // hardware/OS)
+          std::minstd_rand0 minstd(rd());
+          std::function<double(std::minstd_rand0*)> float_generator =
+              [&](std::minstd_rand0* engine) {
+                return (*random_dist)(*engine);
+              };
+
+          TF_ASSIGN_OR_RETURN(
+              argument_literal_j,
+              xla::MakeFakeLiteral(
+                  params[j]->shape(), &minstd, std::nullopt,
+                  /*is_sorted=*/false,
+                  /*no_duplicates=*/false, /*use_large_range=*/false,
+                  /*max_bits_of_precision=*/std::nullopt, float_generator));
+        } else {
+          TF_ASSIGN_OR_RETURN(
+              argument_literal_j,
+              MakeFakeLiteralWithSameValue(params[j]->shape(),
+                                           addressable_devices[i]->id()));
+        }
+        ShapeUtil::ForEachSubshape(
+            argument_literal_j.shape(),
+            [&](const Shape& subshape, const ShapeIndex& index) {
+              if (subshape.IsArray()) {
+                for (int64_t k = 0; k < subshape.dimensions_size(); ++k) {
+                  if (subshape.is_dynamic_dimension(k)) {
+                    argument_literal_j.SetDynamicSize(k, index, 0);
+                  }
+                }
+              }
+            });
         if (flatten_arguments) {
           std::vector<Literal> decomposed_argument_literals =
               argument_literal_j.DecomposeTuple();
