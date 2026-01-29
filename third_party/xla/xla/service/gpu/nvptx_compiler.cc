@@ -368,7 +368,18 @@ NVPTXCompiler::GetCodegenBackends(
       backends.push_back(std::make_unique<CublasLtBackend>(
           stream_exec, &debug_options, this, target_config));
     }
-    if (is_backend_enabled(DebugOptions::AUTOTUNE_BACKEND_CUBLAS)) {
+
+    bool enable_cublaslt_fission = debug_options.xla_gpu_enable_cublaslt();
+    // Disable cublaslt for pre-Hopper GPUs due to b/481894850.
+    if (target_config->device_description.gpu_compute_capability().IsCuda() &&
+        !target_config->device_description.gpu_compute_capability()
+             .cuda_compute_capability()
+             ->IsAtLeastHopper()) {
+      enable_cublaslt_fission = false;
+    }
+    bool enable_cublas_fission = enable_cublaslt_fission;
+    if (enable_cublas_fission &&
+        is_backend_enabled(DebugOptions::AUTOTUNE_BACKEND_CUBLAS)) {
       backends.push_back(std::make_unique<FissionBackend>(
           &debug_options, this, target_config,
           std::make_unique<CublasBackend>(stream_exec, &debug_options, this,
@@ -376,7 +387,7 @@ NVPTXCompiler::GetCodegenBackends(
           GetCublasRewriterPipeline(target_config->device_description),
           alias_info, mlir_context));
     }
-    if (debug_options.xla_gpu_enable_cublaslt() &&
+    if (enable_cublaslt_fission && debug_options.xla_gpu_enable_cublaslt() &&
         is_backend_enabled(DebugOptions::AUTOTUNE_BACKEND_CUBLASLT)) {
       backends.push_back(std::make_unique<FissionBackend>(
           &debug_options, this, target_config,

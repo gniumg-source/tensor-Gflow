@@ -1723,11 +1723,17 @@ void AddGemmRewriterPasses(HloPassPipeline& pipeline,
   GemmRewriterOptions fp8_options{GemmRewriterOptions::DType::kFp8Only,
                                   bias_mode};
   fp8_options.enable_cublaslt = true;
+  bool enable_cublaslt = debug_options.xla_gpu_enable_cublaslt();
+  // Disable cublaslt for pre-Hopper GPUs due to b/481894850.
+  if (gpu_version.IsCuda() &&
+      !gpu_version.cuda_compute_capability()->IsAtLeastHopper()) {
+    enable_cublaslt = false;
+  }
   pipeline.AddPass<GemmRewriter>(gpu_version, toolkit_version, fp8_options);
   pipeline.AddPass<GemmRewriter>(
       gpu_version, toolkit_version,
       GemmRewriterOptions{GemmRewriterOptions::DType::kNonFp8Only, bias_mode,
-                          debug_options.xla_gpu_enable_cublaslt()});
+                          enable_cublaslt});
 }
 }  // namespace
 
