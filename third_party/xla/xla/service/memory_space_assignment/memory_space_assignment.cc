@@ -409,7 +409,7 @@ MemorySpaceAssignment::RunMemorySpaceAssignment(
   //     allocations_, /*time*/1);
   ScheduleAsynchronousCopies();
   TF_RETURN_IF_ERROR(SimplifyGraph());
-  TF_RETURN_IF_ERROR(FixSchedule());
+  TF_RETURN_IF_ERROR(SetSchedule());
   TF_ASSIGN_OR_RETURN(auto alias, HloAliasAnalysis::Run(module_, alias_info_));
   TF_RETURN_IF_ERROR(ExportAndColorBuffers(*alias));
   std::vector<int64_t> alt_mem_bytes_occupied;
@@ -798,7 +798,7 @@ absl::Status MemorySpaceAssignment::SimplifyGraph() {
           VLOG(4) << "Instruction removed: " << instruction->ToString();
           removed_instructions.insert(instruction);
           // Instead of deleting the instruction from the schedule, replace it
-          // with a nullptr. This is needed because FixSchedule relies on the
+          // with a nullptr. This is needed because SetSchedule relies on the
           // logical time that is the index into flattened_instructions_ for
           // scheduling asynchronous copies.
           if (instruction_to_flattened_instructions_idx.contains(instruction)) {
@@ -888,16 +888,44 @@ class AsyncCopyStep {
   virtual ~AsyncCopyStep() = default;
 
   bool operator<(const AsyncCopyStep& rhs) const {
+    // AsyncCopySteps are scheduled in a two step algorithm -
+    // 1. ScheduleAsynchronousCopies - This step builds data structures:
+    //    - schedule_before that maps logical time to a list of copy-dones that
+    //      should be scheduled before that time index
+    //    - schedule_after that maps logical time to a list of copy-starts that
+    //      should be scheduled after that time index.
+    // 2. SetSchedule - This step uses the data structures built in the previous
+    //    step to schedule the copy-start and copy-done instructions.
+    //
+    // The purpose of this comparator is to maintain FIFO order and prioritize
+    // evictions over prefetches. The comparison is only used to order/tie-break
+    // copy-dones that are scheduled at the same time and copy-starts that are
+    // scheduled at the same time.
+    //
+    // When comparing two copy-starts or two copy-dones, the effect of the
+    // comparison is:
+    // 1. If copy-start times are same then copy-start with earlier copy-done
+    //    time is scheduled first.
+    // 2. If copy-done times are same then copy-done with earlier copy-start
+    //    time is scheduled first.
+    // 3. If both copy-start and copy-done times are same, then copy-starts and
+    //    copy-dones for evictions are scheduled first.
+    //
+    // Evictions are scheduled first to free up alternate memory. This is
+    // required for correctness when the source buffer of an eviction overlaps
+    // with the destination buffer of another prefetch.
     std::optional<StartPhase> lhs_start_phase = start_phase();
     auto lhs_tuple = std::make_tuple(
         done_phase().schedule_before_time,
         (lhs_start_phase.has_value() ? lhs_start_phase->schedule_after_time
-                                     : done_phase().schedule_before_time));
+                                     : done_phase().schedule_before_time),
+        destination_memory_space() == MemorySpace::kAlternate);
     std::optional<StartPhase> rhs_start_phase = rhs.start_phase();
     auto rhs_tuple = std::make_tuple(
         rhs.done_phase().schedule_before_time,
         (rhs_start_phase.has_value() ? rhs_start_phase->schedule_after_time
-                                     : rhs.done_phase().schedule_before_time));
+                                     : rhs.done_phase().schedule_before_time),
+        destination_memory_space() == MemorySpace::kAlternate);
 
     return lhs_tuple < rhs_tuple;
   }
@@ -907,6 +935,7 @@ class AsyncCopyStep {
   virtual std::optional<StartPhase> start_phase() const = 0;
   virtual void set_start_phase_schedule_after_time(int64_t schedule_after) = 0;
   virtual DonePhase done_phase() const = 0;
+  virtual MemorySpace destination_memory_space() const = 0;
 
  protected:
   AsyncCopyStep() = default;
@@ -937,6 +966,10 @@ class AsyncCopyStepForCopyAllocation : public AsyncCopyStep {
   DonePhase done_phase() const override {
     return {copy_allocation_->copy_done_schedule_before(),
             copy_allocation_->copy_done()};
+  }
+
+  MemorySpace destination_memory_space() const override {
+    return copy_allocation_->memory_space();
   }
 
  private:
@@ -983,6 +1016,10 @@ class AsyncCopyStepForSlice : public AsyncCopyStep {
     return phase;
   }
 
+  MemorySpace destination_memory_space() const override {
+    return sliced_copy_allocation_->memory_space();
+  }
+
  private:
   SlicedCopyAllocation* sliced_copy_allocation_ = nullptr;
   size_t slice_index_;
@@ -1009,6 +1046,10 @@ class AsyncCopyStepForSliceConcat : public AsyncCopyStep {
   DonePhase done_phase() const override {
     return {sliced_copy_allocation_->earliest_available_time(),
             sliced_copy_allocation_->concat()};
+  }
+
+  MemorySpace destination_memory_space() const override {
+    return sliced_copy_allocation_->memory_space();
   }
 
  private:
@@ -1089,7 +1130,7 @@ void MemorySpaceAssignment::ScheduleAsynchronousCopies() {
   }
 }
 
-absl::Status MemorySpaceAssignment::FixSchedule() {
+absl::Status MemorySpaceAssignment::SetSchedule() {
   VLOG(1) << "Fixing schedule...";
   TF_RET_CHECK(module_->has_schedule());
   HloSchedule& schedule = module_->schedule();
@@ -1145,32 +1186,17 @@ absl::Status MemorySpaceAssignment::FixSchedule() {
     }
   }
 
-  // Create the schedule for all computations at the same time, by first
-  // scheduling the before instructions, then the current instruction and
-  // finally the after instructions (each in its respective computation).
-  for (int64_t instruction_index = -1;; ++instruction_index) {
-    auto insts_before_iter = schedule_before_.find(instruction_index);
-    if (insts_before_iter != schedule_before_.end()) {
-      for (HloInstruction* new_instruction : insts_before_iter->second) {
-        HloComputation* computation = new_instruction->parent();
-        if (computation_to_stats.contains(computation)) {
-          ComputationStats& stats = computation_to_stats[computation];
-          VLOG(4) << "before " << instruction_index << ": "
-                  << new_instruction->ToString();
-          InsertInstructionAndEnsureOperandsInserted(
-              new_instruction, &stats.sequence, &stats.inserted_instructions);
-        }
-      }
-    }
-
-    if (instruction_index != -1) {
-      // We allow scheduling copy dones past the root instruction (for
-      // end-of-program cross-program prefetch). So the loop exit condition is
-      // actually here.
-      if (instruction_index >= flattened_instructions_.size()) {
-        break;
-      }
-
+  // Create the schedule for all computations at the same time -
+  // 1. First schedule the current instruction.
+  // 2. Then schedule the copy-done instructions that are supposed to be
+  //    scheduled before the next instruction.
+  // 3. Finally the copy-start instructions that are supposed to be scheduled
+  //    after the current instruction.
+  // Schedule all instructions in their respective computations.
+  int64_t instructions_count = flattened_instructions_.size();
+  for (int64_t instruction_index = -2; instruction_index < instructions_count;
+       ++instruction_index) {
+    if (0 <= instruction_index) {
       HloInstruction* instruction = flattened_instructions_[instruction_index];
       // Insert only if it is not deleted (SimplifyGraph sets it to nullptr if
       // it was deleted) and not previously inserted. Also bitcasts and tuples
@@ -1193,11 +1219,35 @@ absl::Status MemorySpaceAssignment::FixSchedule() {
       }
     }
 
+    // Among all instructions that are supposed to be scheduled after the
+    // current instruction and before the next instruction - schedule the
+    // copy-done instructions first, then the copy-start instructions to avoid
+    // unnecessary overlaps.
+    // Note: Inserting a copy-done instruction recursively inserts all of its
+    // operands, which may include copy-start instructions. This ensures
+    // correctness for cases with just in time copies, where copy-start and
+    // copy-done instructions are scheduled between the same time indexes.
+    auto insts_before_iter = schedule_before_.find(instruction_index + 1);
+    if (insts_before_iter != schedule_before_.end()) {
+      for (HloInstruction* new_instruction : insts_before_iter->second) {
+        HloComputation* computation = new_instruction->parent();
+        if (computation_to_stats.contains(computation)) {
+          ComputationStats& stats = computation_to_stats[computation];
+          VLOG(4) << "before " << instruction_index + 1 << ": "
+                  << new_instruction->ToString();
+          InsertInstructionAndEnsureOperandsInserted(
+              new_instruction, &stats.sequence, &stats.inserted_instructions);
+        }
+      }
+    }
+
     auto insts_after_iter = schedule_after_.find(instruction_index);
     if (insts_after_iter != schedule_after_.end()) {
       for (HloInstruction* new_instruction : insts_after_iter->second) {
         HloComputation* computation = new_instruction->parent();
         if (computation_to_stats.contains(computation)) {
+          VLOG(4) << "after " << instruction_index << ": "
+                  << new_instruction->ToString();
           ComputationStats& stats = computation_to_stats[computation];
           InsertInstructionAndEnsureOperandsInserted(
               new_instruction, &stats.sequence, &stats.inserted_instructions);
