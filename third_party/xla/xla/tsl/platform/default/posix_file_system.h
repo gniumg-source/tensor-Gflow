@@ -45,7 +45,7 @@ class PosixFileSystem : public FileSystem {
       const std::string& filename, TransactionToken* token,
       std::unique_ptr<ReadOnlyMemoryRegion>* result) override;
 
-  absl::Status FileExists(const std::string& fname,
+  absl::Status FileExists(absl::string_view fname,
                           TransactionToken* token) override;
 
   absl::Status GetChildren(const std::string& dir, TransactionToken* token,

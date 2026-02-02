@@ -179,7 +179,7 @@ class RamFileSystem : public FileSystem {
     return absl::UnimplementedError("");
   }
 
-  absl::Status FileExists(const std::string& fname_,
+  absl::Status FileExists(absl::string_view fname_,
                           TransactionToken* token) override {
     FileStatistics stat;
     auto fname = StripRamFsPrefix(fname_);
@@ -351,18 +351,18 @@ class RamFileSystem : public FileSystem {
     return ret;
   }
 
-  bool StartsWith(std::string s, std::string prefix) {
+  bool StartsWith(absl::string_view s, absl::string_view prefix) {
     return absl::StartsWith(s, prefix);
   }
 
-  std::string StripPrefix(std::string s, std::string prefix) {
+  std::string StripPrefix(absl::string_view s, absl::string_view prefix) {
     if (absl::StartsWith(s, prefix)) {
-      return s.erase(0, prefix.size());
+      s.remove_prefix(prefix.size());
     }
-    return s;
+    return std::string(s);
   }
 
-  std::string StripRamFsPrefix(std::string name) {
+  std::string StripRamFsPrefix(absl::string_view name) {
     std::string s = StripPrefix(name, "ram://");
     if (*(s.rbegin()) == '/') {
       s.pop_back();
