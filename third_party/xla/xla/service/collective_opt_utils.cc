@@ -38,6 +38,9 @@ limitations under the License.
 #include "xla/util.h"
 
 namespace xla {
+
+namespace m = match;
+
 namespace {
 
 // Table lookup is a specific HLO pattern used to retrieve a value from
@@ -542,6 +545,72 @@ std::optional<ReduceScatterSpec> AllGatherDynamicSliceCancellation(
     return std::nullopt;
   }
   return spec;
+}
+
+bool IsDynamicSlicingLocalDeviceFromAllGather(
+    HloInstruction* ds, HloAllGatherInstruction* all_gather,
+    int64_t num_partitions, bool is_cross_module, bool use_global_device_ids) {
+  // Check if the user is a DynamicSlice.
+  if (ds->opcode() != HloOpcode::kDynamicSlice) {
+    return false;
+  }
+
+  const HloInstruction* ag_operand = all_gather->operand(0);
+  int64_t all_gather_dimension = all_gather->all_gather_dimension();
+
+  int64_t shard_size = ag_operand->shape().dimensions(all_gather_dimension);
+
+  // The offset operand index in DynamicSlice is 1 + dimension index.
+  int64_t operand_index = all_gather_dimension + 1;
+  if (operand_index >= ds->operand_count()) {
+    VLOG(2) << "DynamicSlice operand index is out of bounds.";
+    return false;
+  }
+  const HloInstruction* offset_hlo = ds->operand(operand_index);
+
+  MapIdToTableOffset map_id = [&](const HloInstruction* hlo, int64_t id) {
+    return HloPredicateIsOp<HloOpcode::kPartitionId>(hlo) ? id : -1;
+  };
+
+  // IsPerIdOffset checks if the offset for the j-th device (partition_id)
+  // is equal to shard_size * j.
+  if (IsPerIdOffset(offset_hlo, shard_size, map_id, num_partitions, all_gather,
+                    is_cross_module, use_global_device_ids)) {
+    return true;
+  }
+  HloInstruction* shard_size_constant;
+  HloInstruction* offset_constant;
+  int64_t dynamic_slice_size_in_ag_dim =
+      ds->dynamic_slice_sizes()[all_gather_dimension];
+  if (Match(ds,
+            m::DynamicSlice().WithOperand(
+                operand_index,
+                m::Add(m::MultiplyAnyOrder(m::Convert(m::PartitionId()),
+                                           m::Constant(&shard_size_constant)),
+                       m::Constant(&offset_constant))))) {
+    std::optional<int64_t> shard_size_constant_value =
+        GetScalarInt64Value(shard_size_constant);
+    if (!shard_size_constant_value.has_value() ||
+        shard_size_constant_value != shard_size) {
+      VLOG(2) << "Constant does not match the shard size: "
+              << shard_size_constant->ToString();
+      return false;
+    }
+    std::optional<int64_t> offset_constant_value =
+        GetScalarInt64Value(offset_constant);
+    if (!offset_constant_value.has_value()) {
+      VLOG(2) << "Offset is not a constant: " << offset_constant->ToString();
+      return false;
+    }
+    if (*offset_constant_value + dynamic_slice_size_in_ag_dim <= shard_size) {
+      return true;
+    }
+    VLOG(2) << "Offset is invalid for shard size: " << shard_size << " "
+            << "offset_value: " << *offset_constant_value << " "
+            << "dynamic_slice_size_in_ag_dim: " << dynamic_slice_size_in_ag_dim;
+  }
+  VLOG(2) << "The match pattern is not recognized: " << offset_hlo->ToString();
+  return false;
 }
 
 std::optional<SplitDimSpec> ExtractSplitDimSpec(

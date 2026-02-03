@@ -81,6 +81,10 @@ std::optional<ReduceScatterSpec> MatchReduceScatter(
     HloPredicate match_replica_id = HloPredicateIsOp<HloOpcode::kReplicaId>,
     bool allow_intervening_bitcast = false);
 
+bool IsDynamicSlicingLocalDeviceFromAllGather(
+    HloInstruction* ds, HloAllGatherInstruction* all_gather,
+    int64_t num_partitions, bool is_cross_module, bool use_global_device_ids);
+
 // Checks whether AG(ICI) and its user DS(ICI) can be canceled out.
 std::optional<ReduceScatterSpec> AllGatherDynamicSliceCancellation(
     const HloAllGatherInstruction* ag, int64_t num_partitions,
@@ -148,6 +152,13 @@ std::optional<CollectiveUsers> FindUniqueDynamicSliceUserFromCollective(
     const HloChannelInstruction* absl_nonnull instruction,
     bool allow_multiple_users, bool allow_intervening_reshape,
     bool allow_intervening_bitcast);
+
+std::optional<ReduceScatterSpec> MatchWithSingleDynamicSliceUser(
+    const HloChannelInstruction* instruction, HloInstruction* user,
+    int64_t num_partitions, int64_t num_replicas,
+    bool allow_multiple_split_dims, HloPredicate match_partition_id,
+    HloPredicate match_replica_id, bool use_global_device_ids,
+    bool is_cross_module);
 
 // Check if a given instruction (AllReduce or AllGather) matches a DynamicSlice;
 // the DynamicSlice has to be the user of the given instruction.
