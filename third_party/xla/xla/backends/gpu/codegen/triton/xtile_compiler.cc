@@ -539,10 +539,22 @@ std::string GetLibdevicePath(const HloModuleConfig& hlo_config,
 namespace ir_emitter_triton_internal {
 
 namespace {
+// Returns whether a control-flow blocks should be created at the tile level.
+bool TilingControlFlowIsEnabled(const HloInstruction* hlo) {
+  return hlo->GetModule()
+      ->config()
+      .debug_options()
+      .xla_gpu_unsupported_disable_nested_gemm_fusions();
+}
+
 absl::StatusOr<absl::InlinedVector<int64_t, 4>> DotTilingParameters(
     const HloInstruction* hlo,
     const SymbolicTileAnalysis& symbolic_tile_analysis,
     const BlockLevelParameters& block_level_parameters) {
+  if (TilingControlFlowIsEnabled(hlo)) {
+    ASSIGN_OR_RETURN(auto tile_config, hlo->backend_config<Tile>());
+    return FlatTiling(tile_config.sizes().begin(), tile_config.sizes().end());
+  }
   const HloInstruction* lhs = hlo->operand(0);
   // When encountering a `dot`, we always expect its operands to be nests.
   auto backend_config = lhs->backend_config<GpuBackendConfig>();
