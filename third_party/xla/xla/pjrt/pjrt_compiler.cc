@@ -34,6 +34,7 @@ limitations under the License.
 #include "xla/hlo/builder/xla_computation.h"
 #include "xla/pjrt/pjrt_executable.h"
 #include "xla/pjrt/proto/pjrt_partial_program.pb.h"
+#include "xla/tsl/platform/errors.h"
 #include "xla/tsl/platform/statusor.h"
 
 namespace xla {
@@ -120,6 +121,13 @@ void PjRtRegisterCompilerFactory(absl::string_view platform_name,
 absl::Status PjRtInitializeCompilerVariant(absl::string_view platform_name,
                                            absl::string_view variant_name) {
   return GetOrCreateCompiler(platform_name, variant_name).status();
+}
+
+absl::Status PjRtInitializeCompilerVariants() {
+  for (const auto& [key, factory] : *CompilerFactoryRegistry()) {
+    TF_RETURN_IF_ERROR(GetOrCreateCompiler(key.first, key.second).status());
+  }
+  return absl::OkStatus();
 }
 
 void PjRtRegisterDefaultCompiler(absl::string_view platform_name,

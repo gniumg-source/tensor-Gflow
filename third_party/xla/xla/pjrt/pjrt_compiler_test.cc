@@ -306,6 +306,53 @@ TEST(PjRtCompilerTest, InitializeCompilerVariant) {
   EXPECT_NE(*compiler, nullptr);
 }
 
+TEST(PjRtCompilerTest, InitializeCompilerVariants) {
+  const std::string platform_1 = "platform_1";
+  const std::string platform_2 = "platform_2";
+  const std::string variant_1 = "variant_1";
+  const std::string variant_2 = "variant_2";
+  auto factory_call_count_1 = std::make_shared<int>(0);
+  auto factory_call_count_2 = std::make_shared<int>(0);
+
+  // Register two different compiler factories.
+  PjRtRegisterCompilerFactory(
+      platform_1, variant_1,
+      [factory_call_count_1]()
+          -> absl::StatusOr<std::unique_ptr<PjRtCompiler>> {
+        (*factory_call_count_1)++;
+        return std::make_unique<PjRtDeserializeCompiler>();
+      });
+
+  PjRtRegisterCompilerFactory(
+      platform_2, variant_2,
+      [factory_call_count_2]()
+          -> absl::StatusOr<std::unique_ptr<PjRtCompiler>> {
+        (*factory_call_count_2)++;
+        return std::make_unique<PjRtDeserializeCompiler>();
+      });
+
+  // Verify factories haven't been called yet.
+  EXPECT_EQ(*factory_call_count_1, 0);
+  EXPECT_EQ(*factory_call_count_2, 0);
+
+  // Initialize all registered variants.
+  auto status = PjRtInitializeCompilerVariants();
+  EXPECT_TRUE(status.ok());
+
+  // Both new factories should have been invoked exactly once.
+  EXPECT_EQ(*factory_call_count_1, 1);
+  EXPECT_EQ(*factory_call_count_2, 1);
+
+  // Verify the compilers are now available in the registry.
+  auto compiler1 = GetPjRtCompiler(platform_1, variant_1);
+  EXPECT_OK(compiler1);
+  EXPECT_NE(*compiler1, nullptr);
+
+  auto compiler2 = GetPjRtCompiler(platform_2, variant_2);
+  EXPECT_OK(compiler2);
+  EXPECT_NE(*compiler2, nullptr);
+}
+
 TEST(PjRtCompilerTest, FactoryError) {
   const std::string platform = "error_test_platform";
   const std::string variant = "error_variant";

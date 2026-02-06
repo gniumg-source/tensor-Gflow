@@ -118,6 +118,9 @@ void PjRtRegisterCompilerFactory(absl::string_view platform_name,
 absl::Status PjRtInitializeCompilerVariant(absl::string_view platform_name,
                                            absl::string_view variant_name);
 
+// Initializes all compiler variants.
+absl::Status PjRtInitializeCompilerVariants();
+
 class PjRtClient;
 
 // Abstract interface to represent device topology that is used by the compiler.
