@@ -583,7 +583,10 @@ cc_library(
     deps = [
         ":compiled_ifrt_ir_program",
         ":ifrt_ir_executable_version",
-        ":program_memory_tracer",
+        if_google(
+            ":program_memory_tracer",
+            ":program_memory_tracer_oss",
+        ),
         ":serialization_utils",
         ":version",
         "//xla:util",
