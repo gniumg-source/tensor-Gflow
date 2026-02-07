@@ -93,12 +93,16 @@ TEST_F(SymbolicTileAnalysisTest, SimpleNormalizationDiamondIsSupported) {
     Tiled HLO:
       p0.2.tile_0 = parameter() offsets [tid_0 * ts_0, tid_1 * ts_1]
         sizes [ts_0, ts_1] strides [1, 1] upper bounds [2, 97]
-      p0.2.tile_1 = parameter() offsets [tid_0 * ts_0, tid_2 * ts_2]
-        sizes [ts_0, ts_2] strides [1, 1] upper bounds [2, 97]
-      constant.tile_0 = constant() offsets [] sizes [] strides []
-        upper bounds []
       reduce.tile_0 = reduce(p0.2.tile_1, constant.tile_0)
         offsets [tid_0 * ts_0] sizes [ts_0] strides [1] upper bounds [2]
+        regions {
+          #0 {
+            p0.2.tile_1 = parameter() offsets [tid_0 * ts_0, tid_2 * ts_2]
+              sizes [ts_0, ts_2] strides [1, 1] upper bounds [2, 97]
+            constant.tile_0 = constant() offsets [] sizes [] strides []
+              upper bounds []
+          }
+        }
       broadcast.tile_0 = broadcast(reduce.tile_0)
         offsets [tid_0 * ts_0, tid_1 * ts_1] sizes [ts_0, ts_1]
         strides [1, 1] upper bounds [2, 97]

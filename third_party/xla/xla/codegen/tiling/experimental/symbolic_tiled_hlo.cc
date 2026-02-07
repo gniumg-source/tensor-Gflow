@@ -18,6 +18,8 @@ limitations under the License.
 #include <sstream>
 #include <string>
 
+#include "absl/strings/str_cat.h"
+#include "absl/strings/str_join.h"
 #include "absl/strings/string_view.h"
 #include "xla/codegen/tiling/experimental/symbolic_tile.h"
 
@@ -27,7 +29,19 @@ std::string SymbolicTiledHloInstruction::ToString(
     absl::string_view field_separator) const {
   std::stringstream ss;
   ss << "hlo: " << hlo_->ToString() << field_separator;
-  ss << "tile: " << symbolic_tile().ToString() << field_separator;
+  ss << "tile: " << symbolic_tile().ToString();
+  if (!regions_.empty()) {
+    ss << field_separator << "regions {";
+    for (int i = 0; i < regions_.size(); ++i) {
+      ss << field_separator
+         << absl::StrCat("#", i, " size: ", regions_[i].size(), " -> ")
+         << absl::StrJoin(regions_[i], ", ",
+                          [](std::string* out, const auto& hlo_) {
+                            out->append(hlo_->hlo()->name());
+                          });
+    }
+    ss << field_separator << "}";
+  }
   return ss.str();
 }
 

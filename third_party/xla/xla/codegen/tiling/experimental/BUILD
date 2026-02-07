@@ -123,7 +123,9 @@ cc_library(
     deps = [
         ":symbolic_tile",
         "//xla/hlo/ir:hlo",
+        "@com_google_absl//absl/strings",
         "@com_google_absl//absl/strings:string_view",
+        "@com_google_absl//absl/types:span",
         "@llvm-project//llvm:Support",
     ],
 )

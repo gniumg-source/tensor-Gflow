@@ -76,5 +76,53 @@ TEST_F(SymbolicTiledHloTest, TestPrinting) {
   )"));
 }
 
+TEST_F(SymbolicTiledHloTest, TestReduceWithRegionPrinting) {
+  HloInstruction* broadcast = ParseAndGetRoot(R"(
+    HloModule m
+
+    max {
+      x = f32[] parameter(0)
+      y = f32[] parameter(1)
+      ROOT maximum = f32[] maximum(x, y)
+    }
+
+    ENTRY e {
+      p0 = f32[2,97]{1,0} parameter(0)
+      constant = f32[] constant(-inf)
+      reduce = f32[2]{0} reduce(p0, constant), dimensions={1}, to_apply=max
+      ROOT broadcast = f32[2,97]{1,0} broadcast(reduce), dimensions={0}
+    }
+  )");
+
+  auto tiling_space_broadcast = TilingSpace::Create(
+      *HloFusionAdaptor::ForInstruction(broadcast), &mlir_context_);
+  auto tiled_broadcast = std::make_unique<SymbolicTiledHloInstruction>(
+      broadcast, GetTestSymbolicTile(*tiling_space_broadcast,
+                                     broadcast->shape().dimensions()));
+  std::optional<SymbolicTiles> operands_tiles =
+      PropagateTileToInput(*tiling_space_broadcast, *broadcast,
+                           GetTestSymbolicTile(*tiling_space_broadcast,
+                                               broadcast->shape().dimensions()),
+                           0);
+  auto tiled_reduce = std::make_unique<SymbolicTiledHloInstruction>(
+      broadcast->operand(0), (*operands_tiles)[0]);
+
+  SymbolicTiledHloInstruction::Region region;
+  region.push_back(std::move(tiled_reduce));
+  tiled_broadcast->AddRegion(std::move(region));
+
+  EXPECT_THAT(*tiled_broadcast, MatchString(R"(
+    hlo: %broadcast = f32[2,97]{1,0} broadcast(%reduce), dimensions={0}
+    tile: (tid_0, tid_1)[ts_0, ts_1]
+      -> offsets [tid_0 * ts_0, tid_1 * ts_1]
+         sizes [ts_0, ts_1]
+         strides [1, 2]
+         upper bounds [2, 97]
+    regions {
+      #0 size: 1 -> reduce
+    }
+  )"));
+}
+
 }  // namespace
 }  // namespace xla::gpu::experimental
