@@ -25,6 +25,7 @@ limitations under the License.
 #include <utility>
 #include <vector>
 
+#include "absl/base/attributes.h"
 #include "absl/strings/string_view.h"
 #include "absl/types/span.h"
 #include "llvm/ADT/Hashing.h"
@@ -180,6 +181,7 @@ class IndexingMap {
 
   // Returns the affine map.
   // TODO: b/446856820 - Remove once all the users are migrated to SymbolicMap.
+  ABSL_DEPRECATED("Use GetSymbolicMap() instead")
   mlir::AffineMap GetAffineMap() const {
     // To avoid recomputing affine_map_ is a cached conversion from
     // symbolic_map_ that gets invalidated when the symbolic_map_ changes.
@@ -323,12 +325,12 @@ class IndexingMap {
       std::vector<Variable> range_vars, std::vector<Variable> rt_vars,
       absl::Span<std::pair<SymbolicExpr, Interval> const> constraints = {});
 
- private:
-  IndexingMap() = default;
-
   IndexingMap(SymbolicMap symbolic_map, std::vector<Variable> dimensions,
               std::vector<Variable> range_vars, std::vector<Variable> rt_vars,
               const llvm::MapVector<SymbolicExpr, Interval>& constraints);
+
+ private:
+  IndexingMap() = default;
 
   // Merges "mod" constraints for the same SymbolicExpr.
   // Returns true if simplification was performed.

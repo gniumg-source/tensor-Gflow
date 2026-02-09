@@ -21,6 +21,7 @@ limitations under the License.
 #include <string>
 
 #include "absl/strings/string_view.h"
+#include "absl/types/span.h"
 #include "llvm/ADT/DenseMap.h"
 #include "llvm/ADT/StringRef.h"
 #include "llvm/Support/raw_ostream.h"
@@ -35,8 +36,12 @@ namespace xla {
 std::string GetBinaryOpString(SymbolicExprType type);
 
 // Prints symbolic expression to stream. If num_dims is provided, then the first
-// num_dims variables are dimensions, and the rest are symbols.
-void Print(SymbolicExpr expr, llvm::raw_ostream& os, int64_t num_dims = -1);
+// num_dims variables are dimensions, and the rest are symbols. If var_names is
+// provided, then variable names are taken from it.
+void Print(SymbolicExpr expr, llvm::raw_ostream& os,
+           std::optional<int64_t> num_dims = std::nullopt);
+void Print(SymbolicExpr expr, llvm::raw_ostream& os,
+           absl::Span<const std::string> var_names);
 
 // Prints symbolic map to stream.
 void Print(const SymbolicMap& map, llvm::raw_ostream& os);
@@ -44,6 +49,11 @@ void Print(const SymbolicMap& map, llvm::raw_ostream& os);
 // Parses symbolic map from string.
 SymbolicMap ParseSymbolicMap(absl::string_view serialized_symbolic_map,
                              mlir::MLIRContext* mlir_context);
+
+// Parses a symbolic map from `map_str`. Advances `map_str` past the
+// parsed map. Returns the parsed map or null if parsing failed.
+SymbolicMap ParseSymbolicMapAndAdvance(absl::string_view* map_str,
+                                       mlir::MLIRContext* mlir_context);
 
 // Parse a symbolic expression from `expr_str`. `num_dims` specifies the
 // number of dimension variables. It is used to determine a variable index from

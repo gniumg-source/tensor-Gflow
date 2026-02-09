@@ -30,6 +30,7 @@ limitations under the License.
 #include "absl/strings/str_cat.h"
 #include "absl/strings/string_view.h"
 #include "absl/strings/strip.h"
+#include "absl/types/span.h"
 #include "llvm/ADT/DenseMap.h"
 #include "llvm/ADT/SmallVector.h"
 #include "llvm/ADT/StringRef.h"
@@ -43,6 +44,64 @@ namespace {
 
 bool IsIdentifierCharacter(char c) {
   return absl::ascii_isalnum(c) || c == '_';
+}
+
+void PrintImpl(SymbolicExpr expr, llvm::raw_ostream& os,
+               std::optional<int64_t> num_dims,
+               absl::Span<const std::string> var_names) {
+  switch (expr.GetType()) {
+    case SymbolicExprType::kConstant:
+      os << expr.GetValue();
+      return;
+    case SymbolicExprType::kVariable: {
+      int64_t var_id = expr.GetValue();
+      if (!var_names.empty()) {
+        if (var_id >= 0 && var_id < var_names.size()) {
+          os << var_names[var_id];
+        } else {
+          os << "v" << var_id;
+        }
+        return;
+      }
+      if (!num_dims.has_value()) {
+        os << "v" << var_id;
+        return;
+      }
+      // If num_dims is provided, then the first num_dims variables are
+      // dimensions, and the rest are symbols.
+      if (var_id < *num_dims) {
+        os << "d" << var_id;
+      } else {
+        os << "s" << (var_id - *num_dims);
+      }
+      return;
+    }
+    case SymbolicExprType::kAdd:
+    case SymbolicExprType::kMul:
+    case SymbolicExprType::kFloorDiv:
+    case SymbolicExprType::kCeilDiv:
+    case SymbolicExprType::kMod: {
+      auto bin_op_str = GetBinaryOpString(expr.GetType());
+      os << "(";
+      PrintImpl(expr.GetLHS(), os, num_dims, var_names);
+      os << " " << bin_op_str << " ";
+      PrintImpl(expr.GetRHS(), os, num_dims, var_names);
+      os << ")";
+      return;
+    }
+    case SymbolicExprType::kMax:
+    case SymbolicExprType::kMin: {
+      auto bin_op_str = GetBinaryOpString(expr.GetType());
+      os << bin_op_str << "(";
+      PrintImpl(expr.GetLHS(), os, num_dims, var_names);
+      os << ", ";
+      PrintImpl(expr.GetRHS(), os, num_dims, var_names);
+      os << ")";
+      return;
+    }
+    default:
+      LOG(FATAL) << "unknown type on symbolic expressions";
+  }
 }
 
 // Helper class to manage the state of the SymbolicExpr parser.
@@ -301,6 +360,19 @@ class SymbolicMapParserImpl {
       : remaining_str_(str), context_(context) {}
 
   SymbolicMap Parse() {
+    SymbolicMap map = ParsePartial();
+    if (!map) {
+      return map;
+    }
+    SkipWhitespace();
+    if (!remaining_str_.empty()) {
+      return ReportError(
+          "Unexpected characters at the end of SymbolicMap string");
+    }
+    return map;
+  }
+
+  SymbolicMap ParsePartial() {
     std::optional<int64_t> num_dims_opt =
         ParseArgList("(", ")", /*is_dim=*/true);
     if (!num_dims_opt.has_value()) {
@@ -329,15 +401,10 @@ class SymbolicMapParserImpl {
       return ReportError(
           "Failed to parse expression list in SymbolicMap string");
     }
-
-    SkipWhitespace();
-    if (!remaining_str_.empty()) {
-      return ReportError(
-          "Unexpected characters at the end of SymbolicMap string");
-    }
-
     return SymbolicMap::Get(context_, num_dims_, num_symbols_, exprs.value());
   }
+
+  absl::string_view GetRemainingStr() const { return remaining_str_; }
 
  private:
   // Logs the error message and returns an empty SymbolicMap similarly to the
@@ -467,52 +534,14 @@ std::string GetBinaryOpString(SymbolicExprType type) {
   }
 }
 
-void Print(SymbolicExpr expr, llvm::raw_ostream& os, int64_t num_dims) {
-  switch (expr.GetType()) {
-    case SymbolicExprType::kConstant:
-      os << expr.GetValue();
-      return;
-    case SymbolicExprType::kVariable: {
-      int64_t var_id = expr.GetValue();
-      if (num_dims == -1) {
-        os << "v" << var_id;
-        return;
-      }
-      // If num_dims is provided, then the first num_dims variables are
-      // dimensions, and the rest are symbols.
-      if (var_id < num_dims) {
-        os << "d" << var_id;
-      } else {
-        os << "s" << (var_id - num_dims);
-      }
-      return;
-    }
-    case SymbolicExprType::kAdd:
-    case SymbolicExprType::kMul:
-    case SymbolicExprType::kFloorDiv:
-    case SymbolicExprType::kCeilDiv:
-    case SymbolicExprType::kMod: {
-      auto bin_op_str = GetBinaryOpString(expr.GetType());
-      os << "(";
-      Print(expr.GetLHS(), os, num_dims);
-      os << " " << bin_op_str << " ";
-      Print(expr.GetRHS(), os, num_dims);
-      os << ")";
-      return;
-    }
-    case SymbolicExprType::kMax:
-    case SymbolicExprType::kMin: {
-      auto bin_op_str = GetBinaryOpString(expr.GetType());
-      os << bin_op_str << "(";
-      Print(expr.GetLHS(), os, num_dims);
-      os << ", ";
-      Print(expr.GetRHS(), os, num_dims);
-      os << ")";
-      return;
-    }
-    default:
-      LOG(FATAL) << "unknown type on symbolic expressions";
-  }
+void Print(SymbolicExpr expr, llvm::raw_ostream& os,
+           std::optional<int64_t> num_dims) {
+  PrintImpl(expr, os, num_dims, {});
+}
+
+void Print(SymbolicExpr expr, llvm::raw_ostream& os,
+           absl::Span<const std::string> var_names) {
+  PrintImpl(expr, os, std::nullopt, var_names);
 }
 
 void Print(const SymbolicMap& map, llvm::raw_ostream& os) {
@@ -539,6 +568,16 @@ SymbolicMap ParseSymbolicMap(absl::string_view serialized_symbolic_map,
   return SymbolicMapParserImpl(serialized_symbolic_map, mlir_context).Parse();
 }
 
+SymbolicMap ParseSymbolicMapAndAdvance(absl::string_view* map_str,
+                                       mlir::MLIRContext* mlir_context) {
+  SymbolicMapParserImpl parser(*map_str, mlir_context);
+  SymbolicMap map = parser.ParsePartial();
+  if (map) {
+    *map_str = parser.GetRemainingStr();
+  }
+  return map;
+}
+
 SymbolicExpr ParseSymbolicExpr(absl::string_view expr_str,
                                mlir::MLIRContext* mlir_context,
                                std::optional<int64_t> num_dims) {
@@ -550,7 +589,9 @@ SymbolicExpr ParseSymbolicExprAndAdvance(absl::string_view* expr_str,
                                          std::optional<int64_t> num_dims) {
   SymbolicExprParserImpl parser(*expr_str, mlir_context, num_dims);
   SymbolicExpr expr = parser.ParsePartial();
-  *expr_str = parser.GetRemainingStr();
+  if (expr) {
+    *expr_str = parser.GetRemainingStr();
+  }
   return expr;
 }
 
@@ -559,7 +600,9 @@ SymbolicExpr ParseSymbolicExprAndAdvance(
     const llvm::DenseMap<llvm::StringRef, SymbolicExpr>& variable_map) {
   SymbolicExprParserImpl parser(*expr_str, mlir_context, &variable_map);
   SymbolicExpr expr = parser.ParsePartial();
-  *expr_str = parser.GetRemainingStr();
+  if (expr) {
+    *expr_str = parser.GetRemainingStr();
+  }
   return expr;
 }
 
