@@ -202,6 +202,12 @@ xla_test(
         {},
     ),
     backend_tags = {
+        "h100": [
+            "multi_gpu",
+            "no_oss",
+        ] + if_google([
+            "full",
+        ]),
         "gpu": [
             "multi_gpu",
             "no_oss",

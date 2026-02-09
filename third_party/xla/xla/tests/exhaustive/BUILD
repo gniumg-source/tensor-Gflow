@@ -3,6 +3,7 @@
 
 load("//xla/tests:build_defs.bzl", "GPU_BACKENDS", "xla_test")
 load("//xla/tests/exhaustive:build_defs.bzl", "exhaustive_xla_test")
+load("//xla/tsl:tsl.bzl", "if_google")
 load("//xla/tsl:tsl.default.bzl", "filegroup", "get_compatible_with_portable")
 load("//xla/tsl/platform:rules_cc.bzl", "cc_library")
 
@@ -172,9 +173,14 @@ xla_test(
     # own synchronization. This can lead to TSAN false positives that are hard
     # to track down.
     backend_tags = {
-        gpu: ["notsan"]
-        for gpu in GPU_BACKENDS
-        if gpu != "nvgpu_any" and gpu != "amdgpu_any"
+        "h100": [
+            "notsan",
+        ] + if_google([
+            "full",
+        ]),
+        "gpu": [
+            "notsan",
+        ],
     },
     backends = ["cpu"] + [
         gpu

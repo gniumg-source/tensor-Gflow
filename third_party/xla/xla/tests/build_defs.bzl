@@ -83,6 +83,7 @@ def prepare_nvidia_gpu_backend_data(backends, disabled_backends, backend_tags, b
     for gpu_backend in NVIDIA_GPU_BACKENDS:
         all_tags = new_backend_tags[gpu_backend]
         requires_gpu = [t for t in all_tags if t.startswith("requires-gpu-")]
+        requires_full_gpu = "full" in new_backend_tags[gpu_backend]
         requires_sm, only = None, False
         num_gpus = None
         for tag in requires_gpu:
@@ -108,7 +109,8 @@ def prepare_nvidia_gpu_backend_data(backends, disabled_backends, backend_tags, b
             new_disabled_backends.append(gpu_backend)
         else:
             sm_major, sm_minor = sm_requirements[gpu_backend]
-            sm_tag = "requires-gpu-nvidia" if sm_major == 0 else "requires-gpu-sm%s%s-only" % (sm_major, sm_minor)
+            full = "-full" if requires_full_gpu else ""
+            sm_tag = "requires-gpu-nvidia" if sm_major == 0 else "requires-gpu-sm%s%s%s-only" % (sm_major, sm_minor, full)
             if num_gpus:
                 sm_tag += ":%d" % num_gpus
             new_backend_tags[gpu_backend] = [t for t in all_tags if t not in requires_gpu]

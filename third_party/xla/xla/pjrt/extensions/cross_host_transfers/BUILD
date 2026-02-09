@@ -33,13 +33,22 @@ cc_library(
 xla_test(
     name = "pjrt_c_api_cross_host_transfers_extension_gpu_test",
     srcs = ["pjrt_c_api_cross_host_transfers_extension_gpu_test.cc"],
+    backend_tags = {
+        "h100": [
+            "multi_gpu",
+            "no_oss",
+        ] + if_google([
+            "full",
+        ]),
+        "gpu": [
+            "multi_gpu",
+            "no_oss",
+        ],
+    },
     backends = ["gpu"],
     tags = if_google([
         "config-cuda-only",
-    ]) + [
-        "multi_gpu",
-        "no_oss",
-    ],
+    ]),
     deps = [
         ":pjrt_c_api_cross_host_transfer_extension",
         "//xla:debug_options_flags",

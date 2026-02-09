@@ -228,6 +228,13 @@ xla_test(
     name = "functional_hlo_runner_test",
     srcs = ["functional_hlo_runner_test.cc"],
     backend_tags = {
+        "h100": [
+            "multi_gpu",
+            "no_oss",
+            "nomsan",
+        ] + if_google([
+            "full",
+        ]),
         "gpu": [
             "multi_gpu",
             "no_oss",

@@ -6,7 +6,7 @@ load(
 load("@rules_cc//cc:cc_library.bzl", "cc_library")
 load("//xla:xla.default.bzl", "xla_cc_test", "xla_internal", "xla_py_proto_library")
 load("//xla/tests:build_defs.bzl", "xla_test")
-load("//xla/tsl:tsl.bzl", "internal_visibility", "nvtx_headers")
+load("//xla/tsl:tsl.bzl", "if_google", "internal_visibility", "nvtx_headers")
 load("//xla/tsl:tsl.default.bzl", "get_compatible_with_portable")
 load("//xla/tsl/platform:build_config.bzl", "tf_proto_library")
 load("//xla/tsl/platform/default:cuda_build_defs.bzl", "if_cuda_is_configured")
@@ -1665,9 +1665,11 @@ xla_test(
     name = "collective_kernel_thunk_test",
     srcs = ["collective_kernel_thunk_test.cc"],
     backend_tags = {
-        "gpu": [
+        "h100": [
             "multi_gpu",
-        ],
+        ] + if_google([
+            "full",
+        ]),
     },
     backends = ["h100"],
     deps = [

@@ -2684,15 +2684,22 @@ xla_test(
     name = "collective_ops_test",
     srcs = ["collective_ops_test.cc"],
     args = ["--xla_force_host_platform_device_count=4"],
-    backend_tags = {
-        "gpu": [
-            "multi_gpu",
-            "no_oss",
-        ],
-        "cpu": [
-            "notsan",
-        ],
-    },
+    backend_tags =
+        {
+            "h100": [
+                "multi_gpu",
+                "no_oss",
+            ] + if_google([
+                "full",
+            ]),
+            "gpu": [
+                "multi_gpu",
+                "no_oss",
+            ],
+            "cpu": [
+                "notsan",
+            ],
+        },
     backends = [
         "gpu",
         "cpu",
