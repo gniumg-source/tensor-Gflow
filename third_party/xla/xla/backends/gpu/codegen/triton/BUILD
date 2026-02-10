@@ -484,11 +484,7 @@ xla_test(
         "amdgpu_any",
     ],
     shard_count = 10,
-    tags = [
-        "no_mac",
-        "pjrt_migration_candidate",
-    ],
-    use_legacy_runtime = True,
+    tags = ["no_mac"],
     deps = [
         ":support",
         ":test_utils",
@@ -512,10 +508,11 @@ xla_test(
         "//xla/service/gpu:gpu_device_info_for_tests",
         "//xla/service/gpu:target_constants",
         "//xla/service/gpu/model:block_level_parameters",
-        "//xla/service/gpu/tests:gpu_codegen_test",
+        "//xla/service/gpu/tests:gpu_pjrt_codegen_test",
         "//xla/stream_executor:device_description",
         "//xla/stream_executor/cuda:cuda_compute_capability",
         "//xla/stream_executor/rocm:rocm_compute_capability",
+        "//xla/tests:hlo_pjrt_interpreter_reference_mixin",
         "//xla/tests:test_utils",
         "//xla/tests:xla_internal_test_main",  # fixdeps: keep
         "//xla/tsl/lib/core:status_test_util",

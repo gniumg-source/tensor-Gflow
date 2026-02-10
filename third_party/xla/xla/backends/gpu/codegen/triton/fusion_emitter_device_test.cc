@@ -61,11 +61,12 @@ limitations under the License.
 #include "xla/service/gpu/gpu_device_info_for_tests.h"
 #include "xla/service/gpu/model/block_level_parameters.h"
 #include "xla/service/gpu/target_constants.h"
-#include "xla/service/gpu/tests/gpu_codegen_test.h"
+#include "xla/service/gpu/tests/gpu_pjrt_codegen_test.h"
 #include "xla/shape.h"
 #include "xla/stream_executor/cuda/cuda_compute_capability.h"
 #include "xla/stream_executor/device_description.h"
 #include "xla/stream_executor/rocm/rocm_compute_capability.h"
+#include "xla/tests/hlo_pjrt_interpreter_reference_mixin.h"
 #include "xla/tests/test_utils.h"
 #include "xla/tsl/lib/core/status_test_util.h"
 #include "xla/tsl/platform/env.h"
@@ -90,19 +91,15 @@ const HloFusionInstruction& GetFusionInstruction(
 
 constexpr ErrorSpec kExactMatch{/*aabs=*/0, /*arel=*/0};
 
-class TritonEmitterTest : public GpuCodegenTest, public XTileTestBase {
+class TritonEmitterTest
+    : public HloPjRtInterpreterReferenceMixin<GpuPjRtCodegenTest>,
+      public XTileTestBase {
  public:
   const stream_executor::GpuComputeCapability& GpuComputeCapability() {
-    return backend()
-        .default_stream_executor()
-        ->GetDeviceDescription()
-        .gpu_compute_capability();
+    return device_description().gpu_compute_capability();
   }
   stream_executor::CudaComputeCapability GetCudaComputeCapability() {
-    return backend()
-        .default_stream_executor()
-        ->GetDeviceDescription()
-        .cuda_compute_capability();
+    return device_description().cuda_compute_capability();
   }
   absl::StatusOr<
       std::pair<mlir::OwningOpRef<mlir::ModuleOp>, std::unique_ptr<HloModule>>>
@@ -5178,11 +5175,7 @@ ENTRY e {
 
   auto hlo_text = params.PrepareHloText(kHloTextTemplate);
 
-  TF_ASSERT_OK_AND_ASSIGN(std::unique_ptr<VerifiedHloModule> module,
-                          ParseAndReturnVerifiedModule(hlo_text));
-
-  TF_ASSERT_OK_AND_ASSIGN(auto optimized_module,
-                          GetOptimizedModule(std::move(module)));
+  TF_ASSERT_OK_AND_ASSIGN(auto optimized_module, GetOptimizedModule(hlo_text));
   EXPECT_TRUE(*RunFileCheck(optimized_module->ToString(), R"(
     CHECK: fusion
     CHECK: ROOT {{.*}} scaled-dot
@@ -5248,10 +5241,8 @@ ENTRY e {
 }
 )hlo";
 
-  TF_ASSERT_OK_AND_ASSIGN(std::unique_ptr<VerifiedHloModule> module,
-                          ParseAndReturnVerifiedModule(kHloTextTemplate));
   TF_ASSERT_OK_AND_ASSIGN(auto optimized_module,
-                          GetOptimizedModule(std::move(module)));
+                          GetOptimizedModule(kHloTextTemplate));
   constexpr absl::string_view kExpectedOptimizedHLO = R"(
     CHECK: fusion
     CHECK: ROOT {{.*}} scaled-dot
@@ -5304,10 +5295,8 @@ ENTRY e {
 }
 )hlo";
 
-  TF_ASSERT_OK_AND_ASSIGN(std::unique_ptr<VerifiedHloModule> module,
-                          ParseAndReturnVerifiedModule(kHloTextTemplate));
   TF_ASSERT_OK_AND_ASSIGN(auto optimized_module,
-                          GetOptimizedModule(std::move(module)));
+                          GetOptimizedModule(kHloTextTemplate));
   constexpr absl::string_view kExpectedOptimizedHLO = R"(
     CHECK: fusion
     CHECK: ROOT {{.*}} scaled-dot
@@ -5363,10 +5352,8 @@ ENTRY e {
 }
   )hlo";
 
-  TF_ASSERT_OK_AND_ASSIGN(std::unique_ptr<VerifiedHloModule> module,
-                          ParseAndReturnVerifiedModule(kHloTextTemplate));
   TF_ASSERT_OK_AND_ASSIGN(auto optimized_module,
-                          GetOptimizedModule(std::move(module)));
+                          GetOptimizedModule(kHloTextTemplate));
   constexpr absl::string_view kExpectedOptimizedHLO = R"(
     CHECK: ROOT %{{.*}} = f8e8m0fnu[3,128,4]{2,1,0} broadcast(%{{.*}}), dimensions={0,1}
     CHECK: ROOT %{{.*}} = f8e8m0fnu[3,128,4]{2,1,0} broadcast(%{{.*}}), dimensions={0,1}
@@ -5417,10 +5404,8 @@ TEST_F(TritonScaledDotTest, Fp4Succeeds) {
           rhs_contracting_dims={1}
     }
   )hlo";
-  ASSERT_OK_AND_ASSIGN(std::unique_ptr<VerifiedHloModule> module,
-                       ParseAndReturnVerifiedModule(kHloTextTemplate));
   ASSERT_OK_AND_ASSIGN(auto optimized_module,
-                       GetOptimizedModule(std::move(module)));
+                       GetOptimizedModule(kHloTextTemplate));
   HloComputation* scaled_dot_computation = GetFirstComputationWithInstruction(
       *optimized_module, HloOpcode::kScaledDot);
   constexpr absl::string_view kExpectedTritonIr = R"(
