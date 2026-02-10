@@ -15,7 +15,9 @@ limitations under the License.
 
 #include "xla/backends/gpu/runtime/collective_metadata_thunk.h"
 
+#include <algorithm>
 #include <any>
+#include <array>
 #include <cstddef>
 #include <cstdint>
 #include <memory>
@@ -42,6 +44,9 @@ limitations under the License.
 #include "xla/status_macros.h"
 #include "xla/stream_executor/device_address.h"
 #include "xla/stream_executor/gpu/collective_kernel_metadata.h"
+#include "xla/stream_executor/gpu/gpu_kernel_registry.h"
+#include "xla/stream_executor/gpu/multi_gpu_barrier_kernel.h"
+#include "xla/stream_executor/launch_dim.h"
 #include "xla/stream_executor/stream.h"
 #include "xla/stream_executor/stream_executor.h"
 #include "xla/tsl/platform/errors.h"
@@ -141,6 +146,49 @@ absl::Status CollectiveMetadataThunk::CopyCollectiveMetadataToDevice(
   TF_RETURN_IF_ERROR(stream->Memcpy(&param_to_peers_ptrs_buffer,
                                     param_to_peers_ptrs.data(),
                                     param_to_peers_ptrs_size));
+  return absl::OkStatus();
+}
+
+// Launches a cross-GPU barrier synchronization.
+//
+// This implements a decentralized peer-to-peer barrier synchronization:
+// 1. Each device maintains a signal buffer array (one slot per peer) and a
+//    local monotonic step counter.
+// 2. During execution, a device writes to its designated slot in *every*
+//    peer's signal buffer to indicate arrival.
+// 3. The device then waits locally for all slots in its own signal buffer to
+//    match the expected step value (confirming all peers have arrived).
+//
+// See MultiGpuBarrierKernel for more details.
+absl::Status CollectiveMetadataThunk::LaunchMultiGpuBarrier(
+    se::Stream* stream, int64_t num_devices, RankId rank,
+    std::vector<se::DeviceAddressBase> barrier_addresses,
+    se::DeviceAddressBase local_barrier_signal_value) {
+  using MultiGpuBarrierKernel = se::gpu::MultiGpuBarrierKernel;
+
+  TF_RET_CHECK(num_devices <= MultiGpuBarrierKernel::kMaxPeers)
+      << "Number of participants exceeds MultiGpuBarrierKernel::kMaxPeers";
+  TF_RET_CHECK(barrier_addresses.size() == num_devices)
+      << "Number of barrier addresses does not match number of peers";
+
+  std::array<void*, MultiGpuBarrierKernel::kMaxPeers> signal_buffers;
+  std::fill(signal_buffers.begin(), signal_buffers.end(), nullptr);
+
+  for (int peer = 0; peer < num_devices; ++peer) {
+    signal_buffers[peer] = barrier_addresses[peer].opaque();
+  }
+
+  se::StreamExecutor* executor = stream->parent();
+  TF_ASSIGN_OR_RETURN(auto kernel,
+                      (se::gpu::GpuKernelRegistry::GetGlobalRegistry()
+                           .LoadKernel<MultiGpuBarrierKernel>(executor)));
+
+  se::DeviceAddress<uint32_t> typed_sync_counter(local_barrier_signal_value);
+
+  return kernel.Launch(
+      se::ThreadDim(MultiGpuBarrierKernel::kMaxPeers, 1, 1),
+      se::BlockDim(1, 1, 1), stream, static_cast<int64_t>(rank.value()),
+      static_cast<int64_t>(num_devices), signal_buffers, typed_sync_counter);
   return absl::OkStatus();
 }
 

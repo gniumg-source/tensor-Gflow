@@ -16,6 +16,7 @@ limitations under the License.
 #ifndef XLA_BACKENDS_GPU_RUNTIME_COLLECTIVE_METADATA_THUNK_H_
 #define XLA_BACKENDS_GPU_RUNTIME_COLLECTIVE_METADATA_THUNK_H_
 
+#include <cstddef>
 #include <cstdint>
 #include <memory>
 #include <utility>
@@ -39,6 +40,8 @@ limitations under the License.
 
 namespace xla::gpu {
 
+// TODO(b/481948581) Make this thunk a helper class used by other thunks and
+// mosaic custom calls.
 class CollectiveMetadataThunk : public Thunk {
  public:
   struct Buffer {
@@ -86,6 +89,12 @@ class CollectiveMetadataThunk : public Thunk {
       se::Stream* stream, CollectiveKernelMetadata metadata,
       const std::vector<void*>& param_to_peers_ptrs,
       se::DeviceAddressBase destination);
+
+  // Launches a cross-GPU barrier synchronization.
+  static absl::Status LaunchMultiGpuBarrier(
+      se::Stream* stream, int64_t num_devices, RankId rank,
+      std::vector<se::DeviceAddressBase> barrier_addresses,
+      se::DeviceAddressBase local_barrier_signal_value);
 
  private:
   absl::StatusOr<std::shared_ptr<CollectiveMultimem>> GetCollectiveMultimem(
