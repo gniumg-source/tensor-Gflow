@@ -1,4 +1,4 @@
-/* Copyright 2023 The OpenXLA Authors.
+/* Copyright 2026 The TensorFlow Authors. All Rights Reserved.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -13,12 +13,9 @@ See the License for the specific language governing permissions and
 limitations under the License.
 ==============================================================================*/
 
-#ifndef XLA_FFI_FFI_API_H_
-#define XLA_FFI_FFI_API_H_
+#include <stdlib.h>
 
-// TODO(ezhulenev): This header should be deleted and users should migrate to
-// one of the headers listed below.
-#include "xla/ffi/ffi_interop.h"  // IWYU pragma: keep
-#include "xla/ffi/ffi_registry.h"  // IWYU pragma: keep
-
-#endif  // XLA_FFI_FFI_API_H_
+int main() {
+  abort();
+  return 0;
+}
