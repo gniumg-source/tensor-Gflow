@@ -137,6 +137,12 @@ class SymbolicMap {
 
   SymbolicMap Replace(SymbolicExpr expr, SymbolicExpr replacement) const;
 
+  /// Replaces multiple sub-expressions at once by applying
+  /// `SymbolicExpr::Replace(map)` to each expression. Returns a new SymbolicMap
+  /// with the new results and with the specified number of dims and symbols.
+  SymbolicMap Replace(const llvm::DenseMap<SymbolicExpr, SymbolicExpr>& map,
+                      int64_t numResultDims, int64_t numResultSyms) const;
+
   bool operator==(const SymbolicMap& other) const;
   bool operator!=(const SymbolicMap& other) const { return !(*this == other); }
 
@@ -184,10 +190,6 @@ SymbolicMap CompressDims(const SymbolicMap& map,
 // Expressions are updated to use the new symbol indices.
 SymbolicMap CompressSymbols(const SymbolicMap& map,
                             const llvm::SmallBitVector& unused_symbols);
-
-// Parses a SymbolicMap from its string representation.
-SymbolicMap ParseSymbolicMap(absl::string_view serialized_symbolic_map,
-                             mlir::MLIRContext* mlir_context);
 
 template <typename H>
 H AbslHashValue(H h, const llvm::SmallVector<SymbolicExpr>& vec) {
