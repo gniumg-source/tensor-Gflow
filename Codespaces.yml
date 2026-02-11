@@ -1,0 +1,106 @@
+Facturación de GitHub Codespaces
+Obtén información sobre los costos de uso de GitHub Codespaces, así como las cuotas de uso mensuales que se incluyen con las cuentas personales de GitHub.
+
+En este artículo
+Procedimiento para medir el uso de GitHub Codespaces
+Una instancia deGitHub Codespaces (un "codespace") incurre en dos tipos de cargos.
+
+Tiempo de proceso: tiempo de procesamiento y energía, mientras el codespace está activo.
+Almacenamiento: cantidad de espacio en disco que ocupa el codespace o la compilación previa, mientras existe.
+Además, los codespaces creados previamente se generan con acciones en minutos, consulta Acerca de las precompilaciones de GitHub Codespaces.
+
+Tiempo de proceso
+El tiempo de proceso de un codespace es el tiempo que permanece activo. El uso total del tiempo de proceso para cada tipo de procesador se calcula sumando el tiempo utilizado por todos los codespaces facturables a una cuenta determinada. Estos totales se comunican al servicio de facturación diariamente y se cobran mensualmente.
+
+Volumen de almacenamiento para codespaces
+El almacenamiento es una medida basada en el tiempo de la cantidad de almacenamiento que se usa en GB-horas. El almacenamiento medido para codespaces incluye lo siguiente:
+
+Cualquier archivo que uses en un codespace, como repositorios clonados y archivos de configuración
+Datos cargados en el codespace (por ejemplo, como la entrada o salida del software que se ejecuta en el repositorio)
+Extensiones
+Codespaces creados previamente, consulta Acerca de las precompilaciones de GitHub Codespaces
+Contenedores de desarrollo personalizados, consulta Introducción a los contenedores dev
+Volumen de almacenamiento para codespaces creados a partir de configuraciones personalizadas
+De manera predeterminada, tu codespace se crea a partir de la imagen predeterminada de Linux, también conocida como "configuración de contenedores de desarrollo predeterminada". Si creas un codespace a partir de una configuración de contenedores de desarrollo personalizada, verás un mayor volumen de almacenamiento. Consulta Introducción a los contenedores dev.
+
+Imagen de Linux predeterminada: el volumen de almacenamiento para el codespace solo se basa en los archivos del repositorio y los archivos que agregues al codespace.
+Imagen base personalizada: el volumen de almacenamiento del codespace incluye el contenedor de desarrollo personalizado, además de todos los archivos del repositorio y el codespace.
+Los contenedores basados en la imagen predeterminada no se incluyen en el volumen de almacenamiento, aunque agregues características en la configuración de contenedores de desarrollo. Consulta Adición de características a un archivo devcontainer.json.
+
+Uso gratuito y facturado por cuentas personales
+Los planes de GitHub para organizaciones y empresas no incluyen una cuota gratuita para GitHub Codespaces.
+
+Cuota gratuita
+Todas las cuentas personales de GitHub incluyen una cuota de tiempo de proceso gratuito y almacenamiento para GitHub Codespaces. Cualquier uso más allá de los importes incluidos se factura a la cuenta personal.
+
+Plan de cuenta	Almacenamiento al mes	Tiempo de proceso por mes
+GitHub Free para cuentas personales	15 GB al mes	120 horas
+GitHub Pro	20 GB al mes	180 horas
+Nota:
+
+GitHub Codespaces no está disponible para los repositorios que pertenecen a cuentas de usuario administradas. Para más información, consulta Acerca de Enterprise Managed Users.
+
+Para sugerencias sobre cómo maximizar la utilización del uso permitido, consulta Sacar el máximo partido del uso incluido.
+
+Uso superior a la cuota incluida
+Si tu cuenta no tiene un método de pago válido en el archivo, el uso se bloqueará una vez que uses la cuota.
+
+Si la reanudación de tu codespace está bloqueada y debes seguir trabajando en los cambios en el codespace, puedes realizar cualquiera de las siguientes acciones:
+
+Agrega una forma de pago y revisa la configuración del presupuesto para asegurarte de que satisface tus necesidades de uso. Consulta Configuración de presupuestos para controlar el gasto en productos medidos.
+Exporta los cambios del codespace a una rama. Consulta Exportar los cambios a una rama.
+Espera a que el uso mensual incluido se restablezca al inicio del siguiente ciclo de facturación mensual.
+Pagar por el uso
+Pagarás por el uso de Codespaces con el método de pago configurado para tu cuenta de GitHub. Consulta Administración de la información de facturación y pago.
+
+Para calcular los costes de uso de GitHub Codespaces de pago, usa la calculadora de precios de GitHub.
+Para ver los minutos y el almacenamiento actuales, consulta Visualización del uso de productos medidos y licencias.
+Para optimizar el uso de codespaces:
+Para cuentas personales, consulta Sacar el máximo partido del uso incluido
+Para las cuentas de organización, consulta Administración del costo de GitHub Codespaces en la organización
+Precios
+El costo de proceso será proporcional al número de núcleos de procesador que tenga el tipo de máquina que elijas para el codespace, tal y como se muestra en la tabla siguiente. Por ejemplo, el coste del proceso de usar un codespace durante una hora en una máquina de 16 núcleos es ocho veces mayor que en una máquina de dos núcleos.
+
+Componente	Tipo de máquina	Unidad de medida	Multiplicador de uso incluido	Price
+Procesos de codespaces	2 núcleos	1 hora	2	$0.18
+Procesos de codespaces	4 núcleos	1 hora	4	$0.36
+Procesos de codespaces	8 núcleos	1 hora	8	$0.72
+Procesos de codespaces	16 núcleos	1 hora	16	$1.44
+Procesos de codespaces	32 núcleos	1 hora	32	$2.88
+Almacenamiento de codespaces	Storage	1 GB-mes	No aplicable	0,07 USD
+Cómo se asignan los costos a una cuenta facturable
+Todo el uso se factura a la cuenta de la persona que ha creado el codespace o a la organización propietaria. Consulta Selección de quién posee y paga los codespaces de una organización.
+
+Cuando se transfiere un repositorio a otra organización, la propiedad y la responsabilidad de facturación de los codespaces asociados a ese repositorio cambian en función de la configuración de la nueva organización.
+
+Si un usuario se elimina de una organización o repositorio, su codespace se borra automáticamente.
+
+Repositorios bifurcados
+Los codespaces creados a partir de un repositorio bifurcado se facturan a tu cuenta personal, a no ser que el repositorio ascendente (o primario) esté en una organización que te haya permitido (como miembro o colaborador externo) usar codespaces a costa de la organización.
+
+Por ejemplo, imagina que una organización ha permitido la facturación de codespaces para un miembro o colaborador externo. Si el usuario tiene permiso para bifurcar un repositorio privado propiedad de la organización, posteriormente podrá crear y usar un codespace para el nuevo repositorio en el gasto de la organización. Esto se debe a que la organización es la propietaria del repositorio primario. Ten en cuenta que el propietario de la organización puede quitar el acceso del usuario al repositorio privado, el repositorio bifurcado y, por lo tanto, también al codespace. El propietario de la organización también puede eliminar el repositorio primario, lo que también eliminaría el repositorio bifurcado. Consulta Administrar la política de ramificación para tu repositorio.
+
+Si crea precompilaciones para un repositorio bifurcado, el coste de almacenamiento de esas precompilaciones se resta del almacenamiento incluido mensualmente mientras está disponible. Si ha usado todo el almacenamiento incluido y ha configurado la facturación, se facturará su cuenta personal. Esto es cierto incluso cuando la organización que posee el repositorio primario paga los codespaces que crea para una bifurcación.
+
+Plantillas de GitHub Codespaces
+Cualquier organización puede mantener un repositorio de plantillas para su uso con GitHub Codespaces. Al igual que con cualquier otro repositorio de una organización, un codespace creado a partir de un repositorio de plantillas se factura a la organización si esta permite al usuario que crea el codespace hacerlo a expensas de la organización. De lo contrario, el codespace se factura al usuario que lo crea.
+
+Si un usuario publica un codespace creado a partir de una plantilla, el codespace se publica en un nuevo repositorio propiedad de la cuenta personal del usuario. Si el codespace se factura actualmente a una organización, la propiedad y la facturación del codespace se transfieren al usuario que lo creó.
+
+Un cuenta de usuario administrada no puede ser el propietario facturable de un codespace. Por lo tanto:
+
+El cuenta de usuario administrada solo puede crear un codespace a partir de una plantilla si el codespace se factura a una organización.
+El cuenta de usuario administrada no puede publicar un codespace creado a partir de una plantilla en un nuevo repositorio.
+Administración del presupuesto de GitHub Codespaces
+Si tu cuenta no tiene un método de pago válido en el archivo, el uso se bloqueará una vez que uses la cuota.
+
+Si tienes una forma de pago válida, el gasto puede estar limitado por uno o varios presupuestos. Comprueba los presupuestos establecidos para tu cuenta a fin de asegurarte de que son adecuados para tus necesidades de uso. Consulta Configuración de presupuestos para controlar el gasto en productos medidos.
+
+Las cuentas que se han migrado desde la plataforma de facturación anterior pueden contener presupuestos generados automáticamente que reflejen sus límites de gasto anteriores.
+
+Si tu cuenta personal, de organización o de empresa usa toda su cuota o presupuesto, ya no podrás crear o reanudar espacios de código facturables a esa cuenta. Sin embargo, todavía puedes exportar cualquier cambio en curso del trabajo a una nueva rama. Para más información, consulta Exportar los cambios a una rama.
+
+Información adicional
+Guía de inicio rápido para GitHub Codespaces
+Habilitación o deshabilitación de GitHub Codespaces en una organización
+Administración del costo de GitHub Codespaces en la organización
