@@ -1264,10 +1264,13 @@ void LoadDynamicKernels() {
   absl::call_once(dll_loader_flag, LoadDynamicKernelsInternal);
 }
 
-static std::string Key(absl::string_view op_type, const DeviceType& device_type,
-                       absl::string_view label) {
-  return strings::StrCat(op_type, ":", DeviceTypeString(device_type), ":",
-                         label);
+static void Key(std::string& key, absl::string_view op_type,
+                const DeviceType& device_type, absl::string_view label) {
+  key.assign(op_type.data(), op_type.size());
+  key.append(":");
+  key.append(DeviceTypeString(device_type));
+  key.append(":");
+  key.append(label.data(), label.size());
 }
 
 // Provide a way for users to disable JIT kernels for a transitional period.
@@ -1291,10 +1294,12 @@ void SetupOrDisableJit(KernelRegistry* registry) {
       def_without_label.set_label("");
 
       if (!remove_jit_kernels) {
+        std::string key;
+        Key(key, def_without_label.op(),
+            DeviceType(def_without_label.device_type()),
+            def_without_label.label());
         jit_kernels.emplace(
-            Key(def_without_label.op(),
-                DeviceType(def_without_label.device_type()),
-                def_without_label.label()),
+            std::move(key),
             KernelRegistration(def_without_label, it->second.kernel_class_name,
                                std::move(it->second.factory)));
       }
@@ -1345,9 +1350,9 @@ namespace kernel_factory {
 void OpKernelRegistrar::InitInternal(const KernelDef* kernel_def,
                                      absl::string_view kernel_class_name,
                                      std::unique_ptr<OpKernelFactory> factory) {
-  const std::string key =
-      Key(kernel_def->op(), DeviceType(kernel_def->device_type()),
-          kernel_def->label());
+  std::string key;
+  Key(key, kernel_def->op(), DeviceType(kernel_def->device_type()),
+      kernel_def->label());
 
   // To avoid calling LoadDynamicKernels DO NOT CALL GlobalKernelRegistryTyped
   // here.
@@ -1402,7 +1407,8 @@ absl::Status FindKernelRegistration(
 
   const std::string& label = GetKernelLabelAttr(node_attrs);
 
-  const std::string key = Key(node_op, device_type, label);
+  thread_local std::string key;
+  Key(key, node_op, device_type, label);
   auto typed_registry = GlobalKernelRegistryTyped();
   tf_shared_lock lock(typed_registry->mu);
   auto regs = typed_registry->registry.equal_range(key);
@@ -1435,8 +1441,8 @@ absl::Status FindKernelRegistration(
   // default kernel.
   if (*reg == nullptr &&
       !IsSymbolicExecutionDevice(device_type.type_string())) {
-    const std::string default_key = Key(node_op, DEVICE_DEFAULT, label);
-    auto regs = typed_registry->registry.equal_range(default_key);
+    Key(key, node_op, DEVICE_DEFAULT, label);
+    auto regs = typed_registry->registry.equal_range(key);
     for (auto iter = regs.first; iter != regs.second; ++iter) {
       // If there is a kernel registered for the op and device_type,
       // check that the attrs match.
