@@ -1,0 +1,326 @@
+Documentación de GitHub
+Copiloto de GitHub /Cómo hacerlo /Utilice agentes Copilot /Agente de codificación /Ampliar el agente de codificación con MCP
+Ampliación del agente de codificación GitHub Copilot con el Protocolo de contexto de modelo (MCP)
+Aprenda a utilizar el Protocolo de contexto de modelo (MCP) para ampliar las capacidades del agente de codificación Copilot.
+
+En este artículo
+Requisito previo
+Antes de configurar un servidor MCP para el agente de codificación Copilot, lea el Protocolo de contexto de modelo (MCP) y el agente de codificación Copilot de GitHub para asegurarse de comprender los conceptos sobre los servidores MCP y el agente de codificación Copilot.
+
+Introducción
+Como administrador del repositorio, puede configurar los servidores MCP para su uso en el repositorio. Para ello, utilice una configuración en formato JSON que especifique los detalles de los servidores MCP que desea utilizar. Introduzca la configuración JSON directamente en la configuración del repositorio en GitHub.com.
+
+Los administradores de organizaciones y empresas también pueden configurar servidores MCP como parte de agentes personalizados mediante el frontmatter YAML. Para obtener más información, consulte Configuración de agentes personalizados .
+
+Advertencia
+
+Una vez que haya configurado un servidor MCP, Copilot podrá utilizar las herramientas proporcionadas por el servidor de forma autónoma y no le pedirá su aprobación antes de usarlas.
+
+Nota
+
+El agente de codificación Copilot solo admite herramientas proporcionadas por servidores MCP. No admite recursos ni indicaciones.
+Actualmente, el agente de codificación Copilot no admite servidores MCP remotos que aprovechan OAuth para la autenticación y autorización.
+Agregar una configuración de MCP a su repositorio
+Los administradores del repositorio pueden configurar los servidores MCP siguiendo estos pasos:
+
+En GitHub, navegue a la página principal del repositorio.
+
+Debajo del nombre de tu repositorio, haz clic en Configuración . Si no ves la pestaña "Configuración", selecciona el menú desplegable y haz clic en Configuración .
+
+Captura de pantalla del encabezado de un repositorio que muestra las pestañas. La pestaña "Configuración" está resaltada con un contorno naranja oscuro.
+En la sección "Código y automatización" de la barra lateral, haga clic en Copiloto y luego en Agente de codificación .
+
+Agregue su configuración en la sección de configuración de MCP .
+
+Las siguientes secciones de este artículo explican cómo escribir la configuración JSON que debe ingresar aquí.
+
+Haga clic en Guardar .
+
+Su configuración será validada para garantizar la sintaxis adecuada.
+
+Si su servidor MCP requiere una variable, clave o secreto, agréguelo a su entorno Copilot. Solo las variables y secretos con nombres precedidos por "<nombre del servidor>" COPILOT_MCP_estarán disponibles en su configuración de MCP. Consulte " Configurar un entorno Copilot para el agente de codificación Copilot" .
+
+Cómo escribir una configuración JSON para servidores MCP
+Los servidores MCP se configuran mediante un formato JSON especial. El JSON debe contener un mcpServersobjeto, donde la clave es el nombre del servidor MCP (por ejemplo, sentry) y el valor es un objeto con la configuración de dicho servidor.
+
+JSON
+{
+  "mcpServers": {
+    "MCP SERVER 1": {
+      "command": "VALUE",
+      "args": [ VALUES ],
+      ...
+    },
+    "MCP SERVER 2": {
+      "command": "VALUE",
+      "args": [ VALUES ],
+      ...
+    },
+    ...
+  }
+}
+El objeto de configuración puede contener las siguientes claves:
+
+Claves necesarias para servidores MCP locales y remotos
+
+tools( string[]): Las herramientas del servidor MCP que se habilitarán. Puede encontrar una lista de herramientas en la documentación del servidor o en su código. Recomendamos encarecidamente incluir en la lista de permitidos herramientas de solo lectura específicas, ya que el agente podrá usarlas de forma autónoma y no solicitará su aprobación previa. También puede habilitar todas las herramientas incluyéndolas *en la matriz.
+type( string): El agente de codificación Copilot acepta "local", "stdio", "http", o "sse".
+Teclas específicas de MCP locales
+
+command( string): Obligatorio. El comando a ejecutar para iniciar el servidor MCP.
+args( string[]): Obligatorio. Los argumentos a pasar a command.
+env( object): Opcional. Las variables de entorno que se pasarán al servidor. Este objeto debe asignar el nombre de la variable de entorno que se expondrá al servidor MCP a cualquiera de las siguientes opciones:
+El nombre de un secreto que haya configurado en su entorno Copilot, que comienza con COPILOT_MCP_.
+El nombre de una variable que haya configurado en su entorno Copilot, que comienza con COPILOT_MCP_.
+Teclas específicas del MCP remoto
+
+url( string): Obligatorio. La URL del servidor MCP.
+headers( object): Opcional. Los encabezados que se adjuntan a las solicitudes al servidor. Este objeto debe asignar el nombre de las claves de encabezado a cualquiera de los siguientes:
+El nombre de un secreto que ha configurado en su entorno Copilot, que comienza con COPILOT_MCP_precedido por un $.
+El nombre de una variable que ha configurado en su entorno Copilot, que comienza con COPILOT_MCP_precedido por un $.
+Un valor de cadena.
+Tenga en cuenta que todos los campos stringy string[]además de tools& typeadmiten la sustitución con una variable o secreto que haya configurado en su entorno Copilot, comenzando con COPILOT_MCP_precedido por un $.
+
+Configuraciones de ejemplo
+Ejemplo: Sentry
+El servidor Sentry MCP brinda a Copilot acceso autenticado a las excepciones registradas en Sentry .
+
+JavaScript
+// If you copy and paste this example, you will need to remove the comments prefixed with `//`, which are not valid JSON.
+{
+  "mcpServers": {
+    "sentry": {
+      "type": "local",
+      "command": "npx",
+      // We can use the $SENTRY_HOST environment variable which is passed to
+      // the server because of the `env` value below.
+      "args": ["@sentry/mcp-server@latest", "--host=$SENTRY_HOST"],
+      "tools": ["get_issue_details", "get_issue_summary"],
+      "env": {
+        // We can specify an environment variable value as
+        // a variable in your Copilot environment
+        // where `COPILOT_MCP_SENTRY_HOST` = "https://contoso.sentry.io"...
+        "SENTRY_HOST": "COPILOT_MCP_SENTRY_HOST",
+        // or refer to a secret with a name starting with
+        // `COPILOT_MCP_`.
+        "SENTRY_ACCESS_TOKEN": "COPILOT_MCP_SENTRY_ACCESS_TOKEN"
+      }
+    }
+  }
+}
+Ejemplo: Noción
+El servidor Notion MCP brinda a Copilot acceso autenticado a notas y otros contenidos de Notion .
+
+JavaScript
+// If you copy and paste this example, you will need to remove the comments prefixed with `//`, which are not valid JSON.
+{
+  "mcpServers": {
+    "notionApi": {
+      "type": "local",
+      "command": "docker",
+      "args": [
+        "run",
+        "--rm",
+        "-i",
+        "-e",
+        // We can use the $NOTION_API_KEY environment variable which is passed to
+        // the server because of the `env` value below.
+        "OPENAPI_MCP_HEADERS={\"Authorization\": \"Bearer $NOTION_API_KEY\", \"Notion-Version\": \"2022-06-28\"}",
+       "mcp/notion"
+      ],
+      "env": {
+        // The value of the `COPILOT_MCP_NOTION_API_KEY` secret will be passed to the
+        // server command as an environment variable called `NOTION_API_KEY`
+        "NOTION_API_KEY": "COPILOT_MCP_NOTION_API_KEY"
+      },
+      "tools": ["*"]
+    }
+  }
+}
+Ejemplo: Azure
+El servidor MCP de Azure permite a Copilot comprender sus archivos específicos de Azure y los recursos de Azure dentro de su suscripción al realizar cambios en el código.
+
+Para configurar automáticamente su repositorio con un copilot-setup-steps.ymlarchivo para autenticarse con Azure, además de secretos para la autenticación, clone el repositorio localmente y luego ejecute el comando de la CLI de desarrollador de Azureazd coding-agent config en la raíz del repositorio.
+
+Una vez que haya ejecutado el comando y haya fusionado la solicitud de extracción creada, puede agregar la configuración de MCP a su repositorio.
+
+JSON
+ {
+   "mcpServers": {
+     "Azure": {
+      "type": "local",
+      "command": "npx",
+      "args": [
+        "-y",
+        "@azure/mcp@latest",
+        "server",
+        "start"
+       ],
+      "tools": ["*"]
+     }
+   }
+ }
+Ejemplo: Cloudflare
+El servidor MCP de Cloudflare crea conexiones entre sus servicios de Cloudflare, incluido el procesamiento de documentación y el análisis de datos.
+
+JSON
+{
+  "mcpServers": {
+    "cloudflare": {
+      "type": "sse",
+      "url": "https://docs.mcp.cloudflare.com/sse",
+      "tools": ["*"]
+    }
+  }
+}
+Ejemplo: Azure DevOps
+El servidor Azure DevOps MCP crea una conexión perfecta entre Copilot y sus servicios de Azure DevOps, incluidos elementos de trabajo, canalizaciones o documentación.
+
+Para usar el servidor Azure DevOps MCP con el agente de codificación Copilot, debe actualizar el archivo copilot-setup-steps.yml del repositorio para incluir un paso de flujo de trabajo de inicio de sesión de Azure.
+
+Configure OIDC en una aplicación Microsoft Entra, confiando en GitHub. Consulte Usar la acción de inicio de sesión de Azure con OpenID Connect .
+
+Configurar el acceso a la organización y los proyectos de Azure DevOps para la identidad de la aplicación. Consulta Agregar usuarios de la organización y administrar el acceso .
+
+Agregue un .github/workflows/copilot-setup-steps.ymlarchivo de flujo de trabajo de Acciones en su repositorio si aún no tiene uno.
+
+Agregue un paso de inicio de sesión de Azure al copilot-setup-stepstrabajo de flujo de trabajo.
+
+YAML
+# This workflow uses actions that are not certified by GitHub.
+# They are provided by a third-party and are governed by
+# separate terms of service, privacy policy, and support
+# documentation.
+on:
+  workflow_dispatch:
+permissions:
+  id-token: write
+  contents: read
+jobs:
+  copilot-setup-steps:
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+    environment: copilot
+    steps:
+      - name: Azure login
+        uses: azure/login@a457da9ea143d694b1b9c7c869ebb04ebe844ef5
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          allow-no-subscriptions: true
+Esta configuración garantiza que la azure/loginacción se ejecute cuando se ejecuta el agente de codificación Copilot.
+
+En el entorno Copilot de su repositorio, agregue secretos para su AZURE_CLIENT_IDy AZURE_TENANT_ID.
+
+Configure el servidor Azure DevOps MCP agregando un adoobjeto a su configuración de MCP con las herramientas definidas que desea que use el agente de codificación Copilot.
+
+JSON
+{
+  "mcpServers": {
+    "ado": {
+      "type": "local",
+      "command": "npx",
+      "args": ["-y", "@azure-devops/mcp", "<your-azure-devops-organization>", "-a", "azcli"],
+      "tools": ["wit_get_work_item", "wit_get_work_items_batch_by_ids", ...]
+    }
+  }
+}
+Reutilización de la configuración de MCP desde Visual Studio Code
+Si ya ha configurado servidores MCP en VS Code, puede aprovechar una configuración similar para el agente de codificación Copilot.
+
+Dependiendo de cómo esté configurado VS Code, es posible que puedas encontrar la configuración de MCP en .vscode/mcp.jsonel archivo de tu repositorio o en settings.jsonel archivo privado de tu máquina.
+
+Para adaptar la configuración del agente de codificación Copilot, necesitará:
+
+Agregue una toolsclave para cada servidor MCP, especificando qué herramientas estarán disponibles para Copilot.
+Si ha configurado inputs, cambie a uso envdirecto.
+Si has configurado un envFile, cambia a usarlo envdirectamente.
+Actualice cualquier referencia a inputssu argsconfiguración para que haga referencia a las variables de entorno de env.
+Para obtener más información sobre MCP en VS Code, consulte la documentación de VS Code .
+
+Configuración de un entorno Copilot para el agente de codificación Copilot
+Algunos servidores MCP requieren claves o secretos. Para aprovechar estos servidores en el agente de codificación de Copilot, puede agregar secretos a un entorno para Copilot. Esto garantiza que los secretos se reconozcan correctamente y se transmitan al servidor MCP correspondiente que haya configurado.
+
+Debe ser un administrador de repositorio para configurar un entorno Copilot para su repositorio.
+
+En GitHub, navegue a la página principal del repositorio.
+
+Debajo del nombre de tu repositorio, haz clic en Configuración . Si no ves la pestaña "Configuración", selecciona el menú desplegable y haz clic en Configuración .
+
+Captura de pantalla del encabezado de un repositorio que muestra las pestañas. La pestaña "Configuración" está resaltada con un contorno naranja oscuro.
+En la barra lateral izquierda, haga clic en Entornos .
+
+Haga clic en Nuevo entorno .
+
+Llame al nuevo entorno copiloty haga clic en Configurar entorno .
+
+En “Secretos de entorno”, haga clic en Agregar secreto de entorno .
+
+Asigne al secreto un nombre que comience con COPILOT_MCP_, agregue el valor del secreto y luego haga clic en Agregar secreto .
+
+Validando su configuración de MCP
+Una vez que haya configurado su MCP, debe probarlo para asegurarse de que esté configurado correctamente.
+
+Cree un problema en el repositorio y luego asígnelo a Copilot.
+Espere unos segundos y Copilot dejará una reacción 👀 sobre el problema.
+Espere unos segundos más y Copilot creará una solicitud de extracción, que aparecerá en la línea de tiempo del problema.
+Haga clic en la solicitud de extracción creada en la línea de tiempo y espere hasta que aparezca el evento "Copilot comenzó a trabajar".
+Haga clic en Ver sesión para abrir los registros del agente de codificación de Copilot.
+Haga clic en el botón de puntos suspensivos ( ... ) en la parte superior derecha del visor de registros, luego haga clic en Copiloto en la barra lateral.
+Haga clic en el paso Iniciar servidores MCP para expandir los registros.
+Si sus servidores MCP se iniciaron correctamente, verá sus herramientas enumeradas en la parte inferior de los registros.
+Si sus servidores MCP requieren dependencias que no están instaladas en el ejecutor de GitHub Actions de forma predeterminada, como uvy pipx, o que requieren pasos de configuración especiales, es posible que deba crear un copilot-setup-steps.ymlarchivo de flujo de trabajo de Actions para instalarlas. Para obtener más información, consulte Personalización del entorno de desarrollo para el agente de codificación de GitHub Copilot .
+
+Personalización del servidor MCP de GitHub integrado
+El servidor MCP de GitHub está habilitado de forma predeterminada y se conecta a GitHub con un token de alcance especial que solo tiene acceso de solo lectura al repositorio actual.
+
+Si desea permitir que Copilot acceda a datos fuera del repositorio actual, puede otorgarle un token de acceso personal con acceso más amplio.
+
+Cree un token de acceso personal con los permisos adecuados. Recomendamos usar un token de acceso personal específico, que permita limitar el acceso a permisos de solo lectura en repositorios específicos. Para obtener más información sobre los tokens de acceso personal, consulte Administración de sus tokens de acceso personal .
+
+En GitHub, navegue a la página principal del repositorio.
+
+Debajo del nombre de tu repositorio, haz clic en Configuración . Si no ves la pestaña "Configuración", selecciona el menú desplegable y haz clic en Configuración .
+
+Captura de pantalla del encabezado de un repositorio que muestra las pestañas. La pestaña "Configuración" está resaltada con un contorno naranja oscuro.
+En la sección "Código y automatización" de la barra lateral, haga clic en Copiloto y luego en Agente de codificación .
+
+Agregue su configuración en la sección de configuración de MCP . Por ejemplo, puede agregar lo siguiente:
+
+JavaScript
+ // If you copy and paste this example, you will need to remove the comments prefixed with `//`, which are not valid JSON.
+ {
+   "mcpServers": {
+     "github-mcp-server": {
+       "type": "http",
+       // Remove "/readonly" to enable wider access to all tools.
+       // Then, use the "X-MCP-Toolsets" header to specify which toolsets you'd like to include.
+       // Use the "tools" field to select individual tools from the toolsets.
+       "url": "https://api.githubcopilot.com/mcp/readonly",
+       "tools": ["*"],
+       "headers": {
+         "X-MCP-Toolsets": "repos,issues,users,pull_requests,code_security,secret_protection,actions,web_search"
+       }
+     }
+   }
+ }
+Para obtener más información sobre los conjuntos de herramientas, consulte el archivo README en la documentación del servidor MCP remoto de GitHub.
+
+Haga clic en Guardar .
+
+En la barra lateral izquierda, haga clic en Entornos .
+
+Haga clic en el copilotentorno.
+
+En “Secretos de entorno”, haga clic en Agregar secreto de entorno .
+
+Llame al secreto COPILOT_MCP_GITHUB_PERSONAL_ACCESS_TOKEN, ingrese su token de acceso personal en el campo "Valor", luego haga clic en Agregar secreto .
+
+Para obtener información sobre el uso del servidor GitHub MCP en otros entornos, consulte Uso del servidor GitHub MCP .
+
+Próximos pasos
+Creación de agentes personalizados
+Personalización del entorno de desarrollo para el agente de codificación GitHub Copilot
+Ampliación de GitHub Copilot Chat con servidores del Protocolo de Contexto de Modelo (MCP)
